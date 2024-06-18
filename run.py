@@ -60,9 +60,10 @@ def main():
 
     final_slcsp.to_csv(sys.stdout, index=False) 
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    output_path = FILES_PATH + 'out/slscp_final_' + timestamp + '.csv'
-    save_output(final_slcsp, output_path)
+    if (OUTPUT_FINAL_SLCSP_FILE):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        output_path = FILES_PATH + 'out/slscp_final_' + timestamp + '.csv'
+        save_output(final_slcsp, output_path)
 
 if __name__ == '__main__':
     main()
