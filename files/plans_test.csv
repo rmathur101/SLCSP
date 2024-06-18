@@ -1,0 +1,12 @@
+plan_id,state,metal_level,rate,rate_area
+plan1,NY,Silver,200,1
+plan2,NY,Silver,210,1
+plan3,NY,Silver,205,1
+plan4,CA,Silver,300,2
+plan5,CA,Silver,290,2
+plan6,CA,Gold,310,2
+plan7,TX,Silver,250,3
+plan8,TX,Silver,255,3
+plan9,TX,Silver,245,3
+plan10,IL,Silver,189,7
+plan11,IL,Silver,188,7

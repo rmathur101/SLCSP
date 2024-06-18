@@ -1,0 +1,13 @@
+zipcode,state,county_code,name,rate_area
+12345,NY,1001,CountyA,1
+23456,NY,1002,CountyB,1
+23456,NY,1003,CountyC,1
+34567,CA,2001,CountyD,2
+34567,CA,2002,CountyE,3
+45678,TX,3001,CountyF,3
+545678,TX,3002,CountyG,4
+56789,TX,3003,CountyH,3
+67890,TX,4001,CountyI,6
+78901,TX,5001,CountyJ,5
+78901,TX,5002,CountyK,6
+78902,IL,6003,CountyL,7
