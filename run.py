@@ -1,49 +1,68 @@
-import pandas as pd # type: ignore
-pd.set_option('display.max_rows', None)
 import sys
+import os
+import datetime
+import pandas as pd 
 
-# TODO: remove hardcoded path and put it in a config file
-FILES_PATH = '/Users/rmathur101 1/SLCSP/SLCSP/files/'
+FILES_PATH = os.getenv('SLCSP_FILES_PATH')
+OUTPUT_FINAL_SLCSP_FILE = False
 
-# Load the CSV files to check their content and structure
-slcsp_df = pd.read_csv(FILES_PATH + 'slcsp.csv')
-plans_df = pd.read_csv(FILES_PATH + 'plans.csv')
-zips_df = pd.read_csv(FILES_PATH + 'zips.csv')
+def load_data(slcsp_path, plans_path, zips_path):
+    # We coerce the 'zipcode' column to a string to avoid losing leading zeros when reading the CSV file.
+    slcsp_df = pd.read_csv(slcsp_path, dtype={'zipcode': str})
+    zips_df = pd.read_csv(zips_path, dtype={'zipcode': str})
+    plans_df = pd.read_csv(plans_path)
 
-# Display the first few rows of each dataframe and their column names
-# print(slcsp_df.head(), slcsp_df.columns, plans_df.head(), plans_df.columns, zips_df.head(), zips_df.columns)
+    return slcsp_df, plans_df, zips_df
 
-# Filter out only Silver plans from the plans.csv
-silver_plans = plans_df[plans_df['metal_level'] == 'Silver']
+def filter_plans(plans_df, metal_level='Silver'):
+    return plans_df[plans_df['metal_level'] == metal_level]
 
 # To resolve rate area ambiguities for ZIP codes, we first need to count how many unique rate areas exist per ZIP code
-zip_rate_area_counts = zips_df.groupby('zipcode')['rate_area'].nunique()
+def resolve_rate_areas(zips_df):
+    # Count how many unique rate areas exist per ZIP code. The operation takes zips_df and creates a DataframeGroupBy object, then selects the 'rate_area' to create a SeriesGroupBy object, and finally calls nunique() to count the number of unique rate areas per ZIP code and returns a Series where the index is the ZIP code and the value is the number of unique rate areas.
+    zip_rate_area_counts = zips_df.groupby('zipcode')['rate_area'].nunique()
 
-print(zip_rate_area_counts)
+    # Filter out ZIP codes that map to exactly one rate area. It returns an IndexObject with the ZIP codes that map to exactly one rate area.
+    single_rate_area_zips = zip_rate_area_counts[zip_rate_area_counts == 1].index
 
-sys.exit()
+    # Create a new DataFrame with the ZIP code entries that map to exactly one rate area. .isin returns a boolean Series that filters the rows of zips_df.
+    return zips_df[zips_df['zipcode'].isin(single_rate_area_zips)]
 
-# Filter out ZIP codes that map to exactly one rate area
-single_rate_area_zips = zip_rate_area_counts[zip_rate_area_counts == 1].index
+def calculate_second_lowest_rate(zip_to_silver_plans):
 
-# Extract those ZIP code entries from zips.csv
-resolved_zips = zips_df[zips_df['zipcode'].isin(single_rate_area_zips)]
+    def second_lowest_rate(group):
+        rates = group['rate'].unique()
+        if len(rates) > 1:
+            return sorted(rates)[1]
+        else:
+            return None
 
-# Join resolved ZIP codes with silver plans to get applicable silver plans per ZIP code
-zip_to_silver_plans = pd.merge(resolved_zips, silver_plans, on=['state', 'rate_area'])
+    return zip_to_silver_plans.groupby('zipcode').apply(second_lowest_rate).reset_index()
 
-# Find the second lowest silver plan rate per rate area for these resolved ZIP codes
-def second_lowest_rate(group):
-    rates = group['rate'].unique()
-    if len(rates) > 1:
-        return sorted(rates)[1]  # Return the second lowest unique rate
-    else:
-        return None  # If there's no second lowest rate, return None
+def update_slcsp_with_rates(slcsp_df, second_lowest_rates):
+    final_slcsp = pd.merge(slcsp_df, second_lowest_rates, on='zipcode', how='left')
+    final_slcsp['rate'] = final_slcsp['rate_y']
+    final_slcsp.drop(columns=['rate_x', 'rate_y'], inplace=True)
+    final_slcsp['rate'] = final_slcsp['rate'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else '')
+    return final_slcsp
 
-# Calculate the second lowest rates
-second_lowest_rates = zip_to_silver_plans.groupby('zipcode').apply(second_lowest_rate).reset_index()
-second_lowest_rates.columns = ['zipcode', 'rate']
+def save_output(final_slcsp, output_path):
+    final_slcsp.to_csv(output_path, index=False)
 
-# Now let's preview the results
-second_lowest_rates.head(), zip_to_silver_plans.head()
+def main():
+    slcsp_df, plans_df, zips_df = load_data(FILES_PATH + 'slcsp.csv', FILES_PATH + 'plans.csv', FILES_PATH + 'zips.csv')
+    resolved_zips = resolve_rate_areas(zips_df)
+    silver_plans = filter_plans(plans_df, metal_level='Silver')
+    zip_to_silver_plans = pd.merge(resolved_zips, silver_plans, on=['state', 'rate_area'])
+    second_lowest_rates = calculate_second_lowest_rate(zip_to_silver_plans)
+    second_lowest_rates.columns = ['zipcode', 'rate']
+    final_slcsp = update_slcsp_with_rates(slcsp_df, second_lowest_rates)
 
+    final_slcsp.to_csv(sys.stdout, index=False) 
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    output_path = FILES_PATH + 'out/slscp_final_' + timestamp + '.csv'
+    save_output(final_slcsp, output_path)
+
+if __name__ == '__main__':
+    main()
